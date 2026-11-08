@@ -1,21 +1,24 @@
 package com.gobrowser.tv;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
-import android.content.Context;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -23,11 +26,16 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -42,6 +50,12 @@ public class MainActivity extends Activity {
     private static final int CYAN = Color.rgb(25, 215, 232);
     private static final int MUTED = Color.rgb(164, 174, 204);
 
+    private static final String MODE_SMART = "SMART";
+    private static final String MODE_TRACKPAD = "TRACKPAD";
+    private static final String MODE_DPAD = "DPAD";
+    private static final String MODE_DISABLED = "DISABLED";
+    private static final String PREFS = "go_browser_pointer";
+
     private FrameLayout root;
     private LinearLayout browserChrome;
     private LinearLayout homeScreen;
@@ -50,15 +64,29 @@ public class MainActivity extends Activity {
     private EditText addressInput;
     private TextView engineButton;
     private TextView statusText;
+    private TextView pointerButton;
     private ProgressBar progressBar;
+    private RemotePointerView pointerView;
     private View customVideoView;
     private WebChromeClient.CustomViewCallback customViewCallback;
+    private SharedPreferences pointerPrefs;
+
     private int searchEngineIndex = 0;
+    private String pointerMode = MODE_SMART;
+    private String pointerShape = "ARROW";
+    private String pointerColor = "CYAN";
+    private int pointerSpeed = 22;
+    private int pointerAcceleration = 18;
+    private int pointerSize = 30;
+    private boolean pointerOutline = true;
+    private boolean pointerShadow = true;
+    private boolean pointerClickFeedback = true;
+    private boolean pointerVisible = true;
+    private float cursorX;
+    private float cursorY;
+    private long cursorTouchDownTime = -1L;
 
-    private final String[] engines = {
-            "Google", "Bing", "DuckDuckGo"
-    };
-
+    private final String[] engines = {"Google", "Bing", "DuckDuckGo"};
     private final String[] searchTemplates = {
             "https://www.google.com/search?q=",
             "https://www.bing.com/search?q=",
@@ -68,6 +96,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        pointerPrefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        loadPointerPreferences();
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
@@ -134,6 +164,14 @@ public class MainActivity extends Activity {
         addControl(controls, "Forward  ›", v -> goForward());
         addControl(controls, "↻  Reload", v -> reload());
         addControl(controls, "⌂  Home", v -> showHome());
+        pointerButton = actionButton(pointerButtonLabel(), CYAN);
+        pointerButton.setTextSize(13);
+        pointerButton.setOnClickListener(v -> togglePointerMode());
+        LinearLayout.LayoutParams pointerParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(42));
+        pointerParams.rightMargin = dp(8);
+        controls.addView(pointerButton, pointerParams);
+        addControl(controls, "⚙ Cursor", v -> openPointerSettings());
         main.addView(controls, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
 
@@ -152,6 +190,7 @@ public class MainActivity extends Activity {
 
         buildHomeScreen();
         setContentView(root);
+        updatePointerButton();
     }
 
     private void buildHomeScreen() {
@@ -199,6 +238,12 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         noteParams.topMargin = dp(24);
         homeScreen.addView(note, noteParams);
+
+        TextView pointerTip = text("NEW  •  Press MENU on your remote or choose Cursor settings to customize the smart pointer.", 14, CYAN, false);
+        LinearLayout.LayoutParams pointerTipParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        pointerTipParams.topMargin = dp(14);
+        homeScreen.addView(pointerTip, pointerTipParams);
 
         scroll.addView(homeScreen);
         webContainer.addView(scroll, new FrameLayout.LayoutParams(
@@ -256,6 +301,7 @@ public class MainActivity extends Activity {
                 addressInput.setText(url);
                 progressBar.setVisibility(View.VISIBLE);
                 statusTextMessage("Loading " + url);
+                refreshPointerVisibility();
             }
 
             @Override
@@ -264,6 +310,7 @@ public class MainActivity extends Activity {
                 addressInput.setText(url);
                 progressBar.setVisibility(View.GONE);
                 statusTextMessage(Uri.parse(url).getHost() == null ? "Ready" : Uri.parse(url).getHost());
+                refreshPointerVisibility();
             }
 
             @Override
@@ -296,6 +343,7 @@ public class MainActivity extends Activity {
                 browserChrome.setVisibility(View.GONE);
                 webContainer.setVisibility(View.GONE);
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                refreshPointerVisibility();
             }
 
             @Override
@@ -308,12 +356,20 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         webView.setVisibility(View.GONE);
 
+        pointerView = new RemotePointerView(this);
+        pointerView.setVisibility(View.GONE);
+        webContainer.addView(pointerView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        applyPointerPreferencesToView();
+
         statusText = text("Ready", 12, MUTED, false);
         FrameLayout.LayoutParams statusParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(28), Gravity.BOTTOM | Gravity.RIGHT);
         statusParams.rightMargin = dp(12);
         statusParams.bottomMargin = dp(4);
         webContainer.addView(statusText, statusParams);
+
+        pointerView.post(this::resetPointerToCenter);
     }
 
     private boolean handleUrl(WebView view, String value) {
@@ -356,6 +412,8 @@ public class MainActivity extends Activity {
         webView.setVisibility(View.VISIBLE);
         statusText.setVisibility(View.VISIBLE);
         webView.loadUrl(url);
+        pointerView.post(this::resetPointerToCenter);
+        refreshPointerVisibility();
     }
 
     private void showHome() {
@@ -365,6 +423,8 @@ public class MainActivity extends Activity {
         if (statusText != null) statusText.setVisibility(View.GONE);
         if (progressBar != null) progressBar.setVisibility(View.GONE);
         if (addressInput != null) addressInput.setText("");
+        if (pointerView != null) pointerView.setVisibility(View.GONE);
+        releasePointerTouch();
     }
 
     private void goBack() {
@@ -400,6 +460,7 @@ public class MainActivity extends Activity {
         browserChrome.setVisibility(View.VISIBLE);
         webContainer.setVisibility(View.VISIBLE);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        refreshPointerVisibility();
     }
 
     private void statusTextMessage(String message) {
@@ -466,17 +527,442 @@ public class MainActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private String pointerButtonLabel() {
+        return isPointerModeEnabled() ? "◎ Pointer ON" : "◎ Pointer OFF";
+    }
+
+    private boolean isPointerModeEnabled() {
+        return MODE_SMART.equals(pointerMode) || MODE_TRACKPAD.equals(pointerMode);
+    }
+
+    private void updatePointerButton() {
+        if (pointerButton != null) {
+            pointerButton.setText(pointerButtonLabel());
+            pointerButton.setTextColor(isPointerModeEnabled() ? CYAN : Color.WHITE);
+        }
+    }
+
+    private void togglePointerMode() {
+        releasePointerTouch();
+        pointerMode = isPointerModeEnabled() ? MODE_DPAD : MODE_SMART;
+        savePointerPreferences();
+        applyPointerPreferencesToView();
+        updatePointerButton();
+        refreshPointerVisibility();
+        Toast.makeText(this, isPointerModeEnabled()
+                ? "Smart pointer enabled · Arrows move · OK clicks"
+                : "D-pad focus mode enabled", Toast.LENGTH_LONG).show();
+        if (isPointerModeEnabled()) resetPointerToCenter();
+    }
+
+    private void loadPointerPreferences() {
+        pointerMode = pointerPrefs.getString("mode", MODE_SMART);
+        pointerShape = pointerPrefs.getString("shape", "ARROW");
+        pointerColor = pointerPrefs.getString("color", "CYAN");
+        pointerSpeed = pointerPrefs.getInt("speed", 22);
+        pointerAcceleration = pointerPrefs.getInt("acceleration", 18);
+        pointerSize = pointerPrefs.getInt("size", 30);
+        pointerOutline = pointerPrefs.getBoolean("outline", true);
+        pointerShadow = pointerPrefs.getBoolean("shadow", true);
+        pointerClickFeedback = pointerPrefs.getBoolean("click_feedback", true);
+        pointerVisible = pointerPrefs.getBoolean("visible", true);
+    }
+
+    private void savePointerPreferences() {
+        pointerPrefs.edit()
+                .putString("mode", pointerMode)
+                .putString("shape", pointerShape)
+                .putString("color", pointerColor)
+                .putInt("speed", pointerSpeed)
+                .putInt("acceleration", pointerAcceleration)
+                .putInt("size", pointerSize)
+                .putBoolean("outline", pointerOutline)
+                .putBoolean("shadow", pointerShadow)
+                .putBoolean("click_feedback", pointerClickFeedback)
+                .putBoolean("visible", pointerVisible)
+                .apply();
+    }
+
+    private void applyPointerPreferencesToView() {
+        if (pointerView == null) return;
+        pointerView.configure(
+                pointerShape,
+                cursorColor(pointerColor),
+                pointerSize,
+                pointerOutline,
+                pointerShadow,
+                pointerClickFeedback
+        );
+        refreshPointerVisibility();
+    }
+
+    private int cursorColor(String name) {
+        if ("WHITE".equals(name)) return Color.WHITE;
+        if ("YELLOW".equals(name)) return Color.rgb(255, 220, 55);
+        if ("GREEN".equals(name)) return Color.rgb(65, 235, 145);
+        if ("ORANGE".equals(name)) return Color.rgb(255, 153, 54);
+        return CYAN;
+    }
+
+    private void refreshPointerVisibility() {
+        if (pointerView == null) return;
+        boolean browsing = webView != null && webView.getVisibility() == View.VISIBLE
+                && customVideoView == null;
+        boolean visible = browsing && isPointerModeEnabled() && pointerVisible;
+        pointerView.setVisibility(visible ? View.VISIBLE : View.GONE);
+        updatePointerButton();
+    }
+
+    private void resetPointerToCenter() {
+        if (pointerView == null || pointerView.getWidth() <= 0 || pointerView.getHeight() <= 0) return;
+        cursorX = pointerView.getWidth() / 2f;
+        cursorY = pointerView.getHeight() / 2f;
+        pointerView.setCursorPosition(cursorX, cursorY);
+    }
+
+    private void movePointer(int keyCode, int repeatCount) {
+        if (pointerView == null) return;
+        if (pointerView.getWidth() <= 0 || pointerView.getHeight() <= 0) {
+            resetPointerToCenter();
+        }
+        float repeatFactor = 1f + Math.min(repeatCount, 12) * (pointerAcceleration / 100f);
+        float modeFactor = MODE_TRACKPAD.equals(pointerMode) ? 1.65f : 1f;
+        float distance = dp(pointerSpeed) * repeatFactor * modeFactor;
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) cursorX -= distance;
+        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) cursorX += distance;
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) cursorY -= distance;
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) cursorY += distance;
+
+        float margin = dp(8);
+        cursorX = Math.max(margin, Math.min(pointerView.getWidth() - margin, cursorX));
+        cursorY = Math.max(margin, Math.min(pointerView.getHeight() - margin, cursorY));
+        pointerView.setCursorPosition(cursorX, cursorY);
+
+        if (cursorTouchDownTime >= 0L) {
+            dispatchPointerTouch(MotionEvent.ACTION_MOVE, SystemClock.uptimeMillis());
+        }
+    }
+
+    private void beginPointerTouch(long eventTime) {
+        if (webView == null || webView.getVisibility() != View.VISIBLE || cursorTouchDownTime >= 0L) return;
+        cursorTouchDownTime = eventTime;
+        dispatchPointerTouch(MotionEvent.ACTION_DOWN, eventTime);
+        if (pointerClickFeedback && pointerView != null) pointerView.showClickFeedback();
+    }
+
+    private void endPointerTouch(long eventTime) {
+        if (cursorTouchDownTime < 0L) return;
+        dispatchPointerTouch(MotionEvent.ACTION_UP, eventTime);
+        cursorTouchDownTime = -1L;
+    }
+
+    private void releasePointerTouch() {
+        if (cursorTouchDownTime >= 0L) {
+            endPointerTouch(SystemClock.uptimeMillis());
+        }
+    }
+
+    private void dispatchPointerTouch(int action, long eventTime) {
+        if (webView == null || pointerView == null || webView.getVisibility() != View.VISIBLE) return;
+        float x = cursorX - pointerView.getLeft() - webView.getLeft();
+        float y = cursorY - pointerView.getTop() - webView.getTop();
+        x = Math.max(0, Math.min(webView.getWidth() - 1, x));
+        y = Math.max(0, Math.min(webView.getHeight() - 1, y));
+        long downTime = cursorTouchDownTime >= 0L ? cursorTouchDownTime : eventTime;
+        MotionEvent motion = MotionEvent.obtain(downTime, eventTime, action, x, y, 0);
+        webView.dispatchTouchEvent(motion);
+        motion.recycle();
+    }
+
+    private boolean isWebPagePointerTarget() {
+        return webView != null && webView.getVisibility() == View.VISIBLE
+                && customVideoView == null && addressInput != null && !addressInput.hasFocus();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int keyCode = event.getKeyCode();
+        if (event.getAction() == KeyEvent.ACTION_DOWN &&
+                event.getRepeatCount() == 0 &&
+                (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS)) {
+            openPointerSettings();
+            return true;
+        }
+
+        if (isWebPagePointerTarget() && isPointerModeEnabled() && pointerVisible) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                    keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    movePointer(keyCode, event.getRepeatCount());
+                }
+                return true;
+            }
+
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER ||
+                    keyCode == KeyEvent.KEYCODE_BUTTON_A || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    if (event.getRepeatCount() == 0) beginPointerTouch(event.getEventTime());
+                } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                    endPointerTouch(event.getEventTime());
+                }
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    private void openPointerSettings() {
+        final String[] modeLabels = {"Smart Pointer", "Trackpad", "D-pad Focus", "Pointer Disabled"};
+        final String[] modeValues = {MODE_SMART, MODE_TRACKPAD, MODE_DPAD, MODE_DISABLED};
+        final String[] shapeLabels = {"Arrow", "Ring", "Crosshair"};
+        final String[] shapeValues = {"ARROW", "RING", "CROSSHAIR"};
+        final String[] colorLabels = {"Cyan", "White", "Yellow", "Green", "Orange"};
+        final String[] colorValues = {"CYAN", "WHITE", "YELLOW", "GREEN", "ORANGE"};
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(22), dp(12), dp(22), dp(22));
+        panel.setBackgroundColor(BG);
+        scroll.addView(panel);
+
+        addSettingsIntro(panel, "GO POINTER STUDIO",
+                "Tune the remote cursor for your TV, screen size and preferred feel.");
+
+        addSpinnerSetting(panel, "CONTROL MODE", modeLabels, indexOf(modeValues, pointerMode), position -> {
+            pointerMode = modeValues[position];
+            savePointerPreferences();
+            applyPointerPreferencesToView();
+            updatePointerButton();
+        });
+
+        addSeekBarSetting(panel, "MOVEMENT SPEED", 8, 48, pointerSpeed, " dp / step", value -> {
+            pointerSpeed = value;
+            savePointerPreferences();
+            applyPointerPreferencesToView();
+        });
+
+        addSeekBarSetting(panel, "ACCELERATION", 0, 40, pointerAcceleration, "% per repeat", value -> {
+            pointerAcceleration = value;
+            savePointerPreferences();
+        });
+
+        addSeekBarSetting(panel, "CURSOR SIZE", 20, 48, pointerSize, " dp", value -> {
+            pointerSize = value;
+            savePointerPreferences();
+            applyPointerPreferencesToView();
+        });
+
+        addSpinnerSetting(panel, "CURSOR SHAPE", shapeLabels, indexOf(shapeValues, pointerShape), position -> {
+            pointerShape = shapeValues[position];
+            savePointerPreferences();
+            applyPointerPreferencesToView();
+        });
+
+        addSpinnerSetting(panel, "CURSOR COLOUR", colorLabels, indexOf(colorValues, pointerColor), position -> {
+            pointerColor = colorValues[position];
+            savePointerPreferences();
+            applyPointerPreferencesToView();
+        });
+
+        addSettingsSection(panel, "FINISH & FEEDBACK");
+        addToggleSetting(panel, "Dark high-contrast outline", pointerOutline, checked -> {
+            pointerOutline = checked;
+            savePointerPreferences();
+            applyPointerPreferencesToView();
+        });
+        addToggleSetting(panel, "Soft shadow", pointerShadow, checked -> {
+            pointerShadow = checked;
+            savePointerPreferences();
+            applyPointerPreferencesToView();
+        });
+        addToggleSetting(panel, "Click ripple animation", pointerClickFeedback, checked -> {
+            pointerClickFeedback = checked;
+            savePointerPreferences();
+            applyPointerPreferencesToView();
+        });
+        addToggleSetting(panel, "Show pointer while browsing", pointerVisible, checked -> {
+            pointerVisible = checked;
+            savePointerPreferences();
+            refreshPointerVisibility();
+        });
+
+        TextView resetPosition = actionButton("◎  Reset pointer to centre", CYAN);
+        LinearLayout.LayoutParams resetParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        resetParams.topMargin = dp(12);
+        panel.addView(resetPosition, resetParams);
+        resetPosition.setOnClickListener(v -> resetPointerToCenter());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Cursor settings")
+                .setView(scroll)
+                .setNegativeButton("Reset defaults", (d, which) -> resetPointerPreferences())
+                .setPositiveButton("Done", null)
+                .create();
+        dialog.setOnShowListener(d -> {
+            dialog.getWindow().setBackgroundDrawable(round(PANEL, 18));
+            dialog.getWindow().setLayout(Math.min(getResources().getDisplayMetrics().widthPixels - dp(80), dp(760)),
+                    Math.min(getResources().getDisplayMetrics().heightPixels - dp(80), dp(720)));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(CYAN);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(MUTED);
+        });
+        dialog.show();
+        dialog.getWindow().setBackgroundDrawable(round(PANEL, 18));
+        dialog.getWindow().setLayout(Math.min(getResources().getDisplayMetrics().widthPixels - dp(80), dp(760)),
+                Math.min(getResources().getDisplayMetrics().heightPixels - dp(80), dp(720)));
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(CYAN);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(MUTED);
+    }
+
+    private void addSettingsIntro(LinearLayout panel, String title, String description) {
+        TextView eyebrow = text(title, 12, CYAN, true);
+        panel.addView(eyebrow);
+        TextView body = text(description, 15, MUTED, false);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.topMargin = dp(6);
+        params.bottomMargin = dp(16);
+        panel.addView(body, params);
+    }
+
+    private void addSettingsSection(LinearLayout panel, String title) {
+        TextView heading = text(title, 12, CYAN, true);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.topMargin = dp(18);
+        params.bottomMargin = dp(6);
+        panel.addView(heading, params);
+    }
+
+    private void addSpinnerSetting(LinearLayout panel, String title, String[] choices,
+                                   int selected, OnChoiceChanged listener) {
+        TextView label = text(title, 12, MUTED, true);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelParams.topMargin = dp(10);
+        panel.addView(label, labelParams);
+
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, choices);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setSelection(Math.max(0, selected));
+        spinner.setBackground(round(PANEL_FOCUS, 10));
+        spinner.setPadding(dp(10), 0, dp(10), 0);
+        LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        spinnerParams.topMargin = dp(6);
+        panel.addView(spinner, spinnerParams);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            private boolean first = true;
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (first) {
+                    first = false;
+                    return;
+                }
+                listener.onChanged(position);
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) { }
+        });
+    }
+
+    private void addSeekBarSetting(LinearLayout panel, String title, int min, int max,
+                                   int initial, String suffix, OnIntChanged listener) {
+        LinearLayout line = new LinearLayout(this);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        TextView label = text(title, 12, MUTED, true);
+        line.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView value = text(initial + suffix, 12, Color.WHITE, true);
+        value.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        line.addView(value);
+        LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lineParams.topMargin = dp(14);
+        panel.addView(line, lineParams);
+
+        SeekBar seekBar = new SeekBar(this);
+        seekBar.setMax(max - min);
+        seekBar.setProgress(initial - min);
+        seekBar.setProgressTintList(android.content.res.ColorStateList.valueOf(PURPLE));
+        seekBar.setThumbTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        panel.addView(seekBar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                int newValue = min + progress;
+                value.setText(newValue + suffix);
+                if (fromUser) listener.onChanged(newValue);
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar bar) { }
+            @Override
+            public void onStopTrackingTouch(SeekBar bar) { }
+        });
+    }
+
+    private void addToggleSetting(LinearLayout panel, String title, boolean initial,
+                                  OnBooleanChanged listener) {
+        CheckBox checkBox = new CheckBox(this);
+        checkBox.setText(title);
+        checkBox.setTextSize(14);
+        checkBox.setTextColor(Color.WHITE);
+        checkBox.setButtonTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        checkBox.setPadding(0, dp(3), 0, dp(3));
+        checkBox.setChecked(initial);
+        panel.addView(checkBox, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        checkBox.setOnCheckedChangeListener((button, checked) -> listener.onChanged(checked));
+    }
+
+    private int indexOf(String[] values, String target) {
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(target)) return i;
+        }
+        return 0;
+    }
+
+    private void resetPointerPreferences() {
+        pointerMode = MODE_SMART;
+        pointerShape = "ARROW";
+        pointerColor = "CYAN";
+        pointerSpeed = 22;
+        pointerAcceleration = 18;
+        pointerSize = 30;
+        pointerOutline = true;
+        pointerShadow = true;
+        pointerClickFeedback = true;
+        pointerVisible = true;
+        savePointerPreferences();
+        applyPointerPreferencesToView();
+        updatePointerButton();
+        refreshPointerVisibility();
+        resetPointerToCenter();
+        Toast.makeText(this, "Pointer settings restored", Toast.LENGTH_SHORT).show();
+    }
+
+    private interface OnChoiceChanged { void onChanged(int position); }
+    private interface OnIntChanged { void onChanged(int value); }
+    private interface OnBooleanChanged { void onChanged(boolean value); }
+
     @Override
     public void onBackPressed() {
         if (customVideoView != null) {
             exitFullscreenVideo();
         } else {
+            releasePointerTouch();
             goBack();
         }
     }
 
     @Override
     protected void onPause() {
+        releasePointerTouch();
         if (webView != null) webView.onPause();
         super.onPause();
     }
@@ -489,6 +975,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        releasePointerTouch();
         if (webView != null) {
             webView.stopLoading();
             webView.loadUrl("about:blank");
