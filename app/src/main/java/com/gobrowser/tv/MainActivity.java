@@ -658,23 +658,36 @@ public class MainActivity extends Activity {
         x = Math.max(0, Math.min(webView.getWidth() - 1, x));
         y = Math.max(0, Math.min(webView.getHeight() - 1, y));
         int action = cursorHovering ? MotionEvent.ACTION_HOVER_MOVE : MotionEvent.ACTION_HOVER_ENTER;
-        MotionEvent hover = MotionEvent.obtain(eventTime, eventTime, action, x, y, 0);
-        hover.setSource(InputDevice.SOURCE_MOUSE);
-        hover.setToolType(0, MotionEvent.TOOL_TYPE_MOUSE);
+        MotionEvent hover = obtainMouseHover(eventTime, action, x, y);
         webView.dispatchGenericMotionEvent(hover);
         hover.recycle();
         cursorHovering = true;
+    }
+
+    private MotionEvent obtainMouseHover(long eventTime, int action, float x, float y) {
+        MotionEvent.PointerProperties[] properties = new MotionEvent.PointerProperties[1];
+        properties[0] = new MotionEvent.PointerProperties();
+        properties[0].id = 0;
+        properties[0].toolType = MotionEvent.TOOL_TYPE_MOUSE;
+
+        MotionEvent.PointerCoords[] coordinates = new MotionEvent.PointerCoords[1];
+        coordinates[0] = new MotionEvent.PointerCoords();
+        coordinates[0].x = x;
+        coordinates[0].y = y;
+        coordinates[0].pressure = 1f;
+        coordinates[0].size = 1f;
+
+        return MotionEvent.obtain(
+                eventTime, eventTime, action, 1, properties, coordinates,
+                0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_MOUSE, 0);
     }
 
     private void exitPointerHover() {
         if (!cursorHovering || webView == null || pointerView == null) return;
         float x = cursorX - pointerView.getLeft() - webView.getLeft();
         float y = cursorY - pointerView.getTop() - webView.getTop();
-        MotionEvent hover = MotionEvent.obtain(
-                SystemClock.uptimeMillis(), SystemClock.uptimeMillis(),
-                MotionEvent.ACTION_HOVER_EXIT, x, y, 0);
-        hover.setSource(InputDevice.SOURCE_MOUSE);
-        hover.setToolType(0, MotionEvent.TOOL_TYPE_MOUSE);
+        long now = SystemClock.uptimeMillis();
+        MotionEvent hover = obtainMouseHover(now, MotionEvent.ACTION_HOVER_EXIT, x, y);
         webView.dispatchGenericMotionEvent(hover);
         hover.recycle();
         cursorHovering = false;
