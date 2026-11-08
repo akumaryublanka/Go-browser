@@ -426,7 +426,7 @@ public final class SettingsPanel extends FrameLayout {
     private void addActionRow(LinearLayout parent, String title, String hint, int iconRes,
                               Runnable action) {
         LinearLayout row = new LinearLayout(context);
-        row.setOrientation(HORIZONTAL);
+        row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(18), 0, dp(14), 0);
         row.setFocusable(true);
@@ -446,7 +446,7 @@ public final class SettingsPanel extends FrameLayout {
         row.addView(icon, iconParams);
 
         LinearLayout copy = new LinearLayout(context);
-        copy.setOrientation(VERTICAL);
+        copy.setOrientation(LinearLayout.VERTICAL);
 
         TextView label = TvUi.text(context, title, 15,
                 TvUi.color(context, R.color.cream), true);
@@ -570,7 +570,7 @@ public final class SettingsPanel extends FrameLayout {
             this.callback = callback;
             this.options = new TextView[labels.length];
 
-            setOrientation(HORIZONTAL);
+            setOrientation(LinearLayout.HORIZONTAL);
             setBackground(TvUi.rounded(context, TvUi.color(context, R.color.surface), 15));
             setPadding(dp(4), dp(4), dp(4), dp(4));
 
