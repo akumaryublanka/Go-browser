@@ -33,9 +33,9 @@ public final class RemotePointerView extends View {
         setClickable(false);
         setFocusable(false);
         setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        // Software drawing is used only for this small overlay so the pointer shadow
-        // remains available on older Android 6 TV rendering stacks.
-        setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        // Keep the full-screen overlay hardware accelerated; shadows are drawn as
+        // compact offset silhouettes to avoid a large software bitmap on 4K TVs.
+        setLayerType(View.LAYER_TYPE_NONE, null);
     }
 
     public void configure(String newShape, int newColor, int newSizeDp,
@@ -112,34 +112,45 @@ public final class RemotePointerView extends View {
         outline.setStyle(Paint.Style.STROKE);
         outline.setStrokeJoin(Paint.Join.ROUND);
         outline.setStrokeCap(Paint.Cap.ROUND);
+        if (showShadow) {
+            canvas.save();
+            canvas.translate(0, size * 0.055f);
+            fill.setStyle(Paint.Style.FILL);
+            fill.setColor(Color.argb(175, 0, 0, 0));
+            canvas.drawPath(arrow, fill);
+            canvas.restore();
+        }
+
         outline.setStrokeWidth(showOutline ? stroke * 2.4f : stroke);
         outline.setColor(showOutline ? Color.rgb(7, 10, 20) : Color.WHITE);
         outline.clearShadowLayer();
-        if (showShadow) outline.setShadowLayer(size * 0.13f, 0, size * 0.07f, Color.BLACK);
         canvas.drawPath(arrow, outline);
 
         fill.setStyle(Paint.Style.FILL);
         fill.setColor(color);
         fill.clearShadowLayer();
-        if (showShadow) fill.setShadowLayer(size * 0.10f, 0, size * 0.05f, Color.argb(190, 0, 0, 0));
         canvas.drawPath(arrow, fill);
-        fill.clearShadowLayer();
     }
 
     private void drawRing(Canvas canvas, float x, float y, float size, float stroke) {
         float radius = size * 0.42f;
         outline.setStyle(Paint.Style.STROKE);
+        if (showShadow) {
+            outline.setStyle(Paint.Style.STROKE);
+            outline.setStrokeWidth(Math.max(stroke * 3f, size * 0.12f));
+            outline.setColor(Color.argb(170, 0, 0, 0));
+            canvas.drawCircle(x, y + size * 0.045f, radius, outline);
+        }
+        outline.setStyle(Paint.Style.STROKE);
         outline.setStrokeWidth(showOutline ? stroke * 3.2f : stroke);
         outline.setColor(showOutline ? Color.rgb(7, 10, 20) : Color.WHITE);
         outline.clearShadowLayer();
-        if (showShadow) outline.setShadowLayer(size * 0.12f, 0, size * 0.06f, Color.BLACK);
         canvas.drawCircle(x, y, radius, outline);
 
         fill.setStyle(Paint.Style.STROKE);
         fill.setStrokeWidth(Math.max(stroke * 1.8f, size * 0.12f));
         fill.setColor(color);
         fill.clearShadowLayer();
-        if (showShadow) fill.setShadowLayer(size * 0.08f, 0, size * 0.04f, Color.BLACK);
         canvas.drawCircle(x, y, radius, fill);
         fill.clearShadowLayer();
         fill.setStyle(Paint.Style.FILL);
@@ -149,11 +160,23 @@ public final class RemotePointerView extends View {
     private void drawCrosshair(Canvas canvas, float x, float y, float size, float stroke) {
         float radius = size * 0.36f;
         outline.setStyle(Paint.Style.STROKE);
+        if (showShadow) {
+            outline.setStyle(Paint.Style.STROKE);
+            outline.setStrokeWidth(Math.max(stroke * 3f, size * 0.075f));
+            outline.setStrokeCap(Paint.Cap.ROUND);
+            outline.setColor(Color.argb(170, 0, 0, 0));
+            float sy = size * 0.045f;
+            canvas.drawCircle(x, y + sy, radius, outline);
+            canvas.drawLine(x - size * 0.65f, y + sy, x - radius * 0.45f, y + sy, outline);
+            canvas.drawLine(x + radius * 0.45f, y + sy, x + size * 0.65f, y + sy, outline);
+            canvas.drawLine(x, y - size * 0.65f + sy, x, y - radius * 0.45f + sy, outline);
+            canvas.drawLine(x, y + radius * 0.45f + sy, x, y + size * 0.65f + sy, outline);
+        }
+        outline.setStyle(Paint.Style.STROKE);
         outline.setStrokeWidth(showOutline ? stroke * 3.1f : stroke);
         outline.setStrokeCap(Paint.Cap.ROUND);
         outline.setColor(showOutline ? Color.rgb(7, 10, 20) : Color.WHITE);
         outline.clearShadowLayer();
-        if (showShadow) outline.setShadowLayer(size * 0.10f, 0, size * 0.05f, Color.BLACK);
         canvas.drawCircle(x, y, radius, outline);
         canvas.drawLine(x - size * 0.65f, y, x - radius * 0.45f, y, outline);
         canvas.drawLine(x + radius * 0.45f, y, x + size * 0.65f, y, outline);

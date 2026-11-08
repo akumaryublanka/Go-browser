@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -85,6 +86,7 @@ public class MainActivity extends Activity {
     private float cursorX;
     private float cursorY;
     private long cursorTouchDownTime = -1L;
+    private boolean cursorHovering = false;
 
     private final String[] engines = {"Google", "Bing", "DuckDuckGo"};
     private final String[] searchTemplates = {
@@ -552,7 +554,10 @@ public class MainActivity extends Activity {
         Toast.makeText(this, isPointerModeEnabled()
                 ? "Smart pointer enabled · Arrows move · OK clicks"
                 : "D-pad focus mode enabled", Toast.LENGTH_LONG).show();
-        if (isPointerModeEnabled()) resetPointerToCenter();
+        if (isPointerModeEnabled()) {
+            resetPointerToCenter();
+            if (webView != null && webView.getVisibility() == View.VISIBLE) webView.requestFocus();
+        }
     }
 
     private void loadPointerPreferences() {
@@ -638,13 +643,46 @@ public class MainActivity extends Activity {
         cursorY = Math.max(margin, Math.min(pointerView.getHeight() - margin, cursorY));
         pointerView.setCursorPosition(cursorX, cursorY);
 
+        long now = SystemClock.uptimeMillis();
         if (cursorTouchDownTime >= 0L) {
-            dispatchPointerTouch(MotionEvent.ACTION_MOVE, SystemClock.uptimeMillis());
+            dispatchPointerTouch(MotionEvent.ACTION_MOVE, now);
+        } else {
+            dispatchPointerHover(now);
         }
+    }
+
+    private void dispatchPointerHover(long eventTime) {
+        if (webView == null || webView.getVisibility() != View.VISIBLE || pointerView == null) return;
+        float x = cursorX - pointerView.getLeft() - webView.getLeft();
+        float y = cursorY - pointerView.getTop() - webView.getTop();
+        x = Math.max(0, Math.min(webView.getWidth() - 1, x));
+        y = Math.max(0, Math.min(webView.getHeight() - 1, y));
+        int action = cursorHovering ? MotionEvent.ACTION_HOVER_MOVE : MotionEvent.ACTION_HOVER_ENTER;
+        MotionEvent hover = MotionEvent.obtain(eventTime, eventTime, action, x, y, 0);
+        hover.setSource(InputDevice.SOURCE_MOUSE);
+        hover.setToolType(0, MotionEvent.TOOL_TYPE_MOUSE);
+        webView.dispatchGenericMotionEvent(hover);
+        hover.recycle();
+        cursorHovering = true;
+    }
+
+    private void exitPointerHover() {
+        if (!cursorHovering || webView == null || pointerView == null) return;
+        float x = cursorX - pointerView.getLeft() - webView.getLeft();
+        float y = cursorY - pointerView.getTop() - webView.getTop();
+        MotionEvent hover = MotionEvent.obtain(
+                SystemClock.uptimeMillis(), SystemClock.uptimeMillis(),
+                MotionEvent.ACTION_HOVER_EXIT, x, y, 0);
+        hover.setSource(InputDevice.SOURCE_MOUSE);
+        hover.setToolType(0, MotionEvent.TOOL_TYPE_MOUSE);
+        webView.dispatchGenericMotionEvent(hover);
+        hover.recycle();
+        cursorHovering = false;
     }
 
     private void beginPointerTouch(long eventTime) {
         if (webView == null || webView.getVisibility() != View.VISIBLE || cursorTouchDownTime >= 0L) return;
+        dispatchPointerHover(eventTime);
         cursorTouchDownTime = eventTime;
         dispatchPointerTouch(MotionEvent.ACTION_DOWN, eventTime);
         if (pointerClickFeedback && pointerView != null) pointerView.showClickFeedback();
@@ -660,6 +698,7 @@ public class MainActivity extends Activity {
         if (cursorTouchDownTime >= 0L) {
             endPointerTouch(SystemClock.uptimeMillis());
         }
+        exitPointerHover();
     }
 
     private void dispatchPointerTouch(int action, long eventTime) {
