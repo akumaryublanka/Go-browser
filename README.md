@@ -78,8 +78,20 @@ Open the repository in Android Studio with JDK 17 and Android SDK Platform 35 in
 gradle --no-daemon :app:assembleDebug
 ```
 
-The project uses Android Gradle Plugin 8.6.1 and Gradle 8.7. The GitHub Actions workflow
-installs the required SDK platform and uploads a debug APK.
+The project uses Android Gradle Plugin 8.6.1 and Gradle 8.7. GitHub Actions automatically builds
+the debug APK on pushes to `main` and uploads it as an artifact.
+
+## Download the APK from GitHub
+
+1. Open the repository's **Actions** tab.
+2. Open the latest successful **GO Browser 0.4.0 Android build** run.
+3. Scroll to **Artifacts** at the bottom of the run summary.
+4. Download **`go-browser-0.4.0-debug`** and extract the downloaded ZIP.
+5. Install `app-debug.apk` on your Android TV or Android device. This is a debug build; enable
+   installation from unknown sources for the app you use to open it.
+
+The APK is a CI artifact, not a signed Play Store release. It is available while the artifact is
+within GitHub Actions' 30-day retention period.
 
 ## Project layout
 
