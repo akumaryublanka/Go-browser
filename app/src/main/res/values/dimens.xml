@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 10-foot layout: generous margins, readable sizes, large targets. -->
+    <dimen name="screen_pad_h">48dp</dimen>
+    <dimen name="screen_pad_v">32dp</dimen>
+    <dimen name="bar_height">76dp</dimen>
+    <dimen name="control_size">48dp</dimen>
+    <dimen name="address_height">56dp</dimen>
+    <dimen name="tile_height">152dp</dimen>
+    <dimen name="tile_gap">14dp</dimen>
+    <dimen name="radius_small">10dp</dimen>
+    <dimen name="radius_medium">16dp</dimen>
+    <dimen name="radius_large">24dp</dimen>
+</resources>

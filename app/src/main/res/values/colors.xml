@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Warm graphite palette. One accent, used with intent. -->
+    <color name="ink">#0C0B09</color>
+    <color name="ink_deep">#070605</color>
+    <color name="surface">#171512</color>
+    <color name="surface_raised">#211D18</color>
+    <color name="surface_focus">#2E2820</color>
+    <color name="line">#332D24</color>
+    <color name="line_soft">#231F19</color>
+
+    <color name="cream">#F4EFE6</color>
+    <color name="cream_dim">#A89F90</color>
+    <color name="cream_muted">#6E6659</color>
+
+    <color name="amber">#F0A33A</color>
+    <color name="amber_soft">#FFC46B</color>
+    <color name="amber_ink">#1A1206</color>
+
+    <color name="coral">#E0593F</color>
+    <color name="green">#46C08A</color>
+    <color name="sky">#57B6D9</color>
+
+    <!-- Launcher shortcut tiles. -->
+    <color name="brand_youtube">#FF0033</color>
+    <color name="brand_google">#4285F4</color>
+    <color name="brand_netflix">#E50914</color>
+    <color name="brand_wikipedia">#E7E0D2</color>
+    <color name="brand_prime">#00A8E1</color>
+    <color name="brand_spotify">#1DB954</color>
+</resources>
