@@ -454,7 +454,7 @@ public final class HomeView extends FrameLayout {
 
     private LinearLayout sectionHeader(String title, String hint) {
         LinearLayout row = new LinearLayout(context);
-        row.setOrientation(HORIZONTAL);
+        row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -483,7 +483,7 @@ public final class HomeView extends FrameLayout {
         scroll.setPadding(0, dp(14), 0, 0);
 
         LinearLayout row = new LinearLayout(context);
-        row.setOrientation(HORIZONTAL);
+        row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         int count = Math.min(entries.size(), limit);
         for (int i = 0; i < count; i++) {
@@ -500,7 +500,7 @@ public final class HomeView extends FrameLayout {
 
     private View createSiteCard(BrowserStore.Entry entry) {
         LinearLayout card = new LinearLayout(context);
-        card.setOrientation(HORIZONTAL);
+        card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
         card.setFocusable(true);
         card.setClickable(true);
@@ -522,7 +522,7 @@ public final class HomeView extends FrameLayout {
         card.addView(icon, iconParams);
 
         LinearLayout copy = new LinearLayout(context);
-        copy.setOrientation(VERTICAL);
+        copy.setOrientation(LinearLayout.VERTICAL);
 
         TextView title = TvUi.text(context, entry.title, 14,
                 TvUi.color(context, R.color.cream), true);
