@@ -63,7 +63,7 @@ public final class TabSwitcher extends FrameLayout {
         width = Math.max(width, dp(640));
 
         panel = new LinearLayout(context);
-        panel.setOrientation(VERTICAL);
+        panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(28), dp(24), dp(28), dp(24));
         addView(panel, new FrameLayout.LayoutParams(width,
                 ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER));
@@ -90,7 +90,7 @@ public final class TabSwitcher extends FrameLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         list = new LinearLayout(context);
-        list.setOrientation(VERTICAL);
+        list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(0, dp(16), 0, dp(10));
         scroll.addView(list, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -111,7 +111,7 @@ public final class TabSwitcher extends FrameLayout {
 
     private void buildHeader(int count) {
         LinearLayout header = new LinearLayout(context);
-        header.setOrientation(HORIZONTAL);
+        header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
         ImageView close = TvUi.iconButton(context, R.drawable.ic_close, "Close tabs");
@@ -119,7 +119,7 @@ public final class TabSwitcher extends FrameLayout {
         header.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
 
         LinearLayout titles = new LinearLayout(context);
-        titles.setOrientation(VERTICAL);
+        titles.setOrientation(LinearLayout.VERTICAL);
         titles.setPadding(dp(16), 0, 0, 0);
 
         TextView title = TvUi.text(context, "Tabs", 26,
@@ -156,7 +156,7 @@ public final class TabSwitcher extends FrameLayout {
 
     private View buildRow(Item item, int index) {
         LinearLayout row = new LinearLayout(context);
-        row.setOrientation(HORIZONTAL);
+        row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(20), 0, dp(12), 0);
         row.setFocusable(true);
@@ -182,7 +182,7 @@ public final class TabSwitcher extends FrameLayout {
         row.addView(icon, iconParams);
 
         LinearLayout copy = new LinearLayout(context);
-        copy.setOrientation(VERTICAL);
+        copy.setOrientation(LinearLayout.VERTICAL);
 
         TextView title = TvUi.text(context, emptyTitle(item), 16,
                 TvUi.color(context, R.color.cream), true);
